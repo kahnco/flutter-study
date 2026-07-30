@@ -25,6 +25,8 @@ import 'package:flutter_study/features/todos/domain/usecases/remove_todo.dart'
     as _i502;
 import 'package:flutter_study/features/todos/domain/usecases/toggle_todo.dart'
     as _i496;
+import 'package:flutter_study/features/todos/presentation/bloc/todos_bloc.dart'
+    as _i662;
 import 'package:get_it/get_it.dart' as _i174;
 import 'package:injectable/injectable.dart' as _i526;
 
@@ -76,6 +78,14 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.lazySingleton<_i496.ToggleTodo>(
       () => _i496.ToggleTodo(gh<_i58.TodosRepository>()),
+    );
+    gh.factory<_i662.TodosBloc>(
+      () => _i662.TodosBloc(
+        gh<_i819.GetTodos>(),
+        gh<_i181.AddTodo>(),
+        gh<_i496.ToggleTodo>(),
+        gh<_i502.RemoveTodo>(),
+      ),
     );
     return this;
   }
