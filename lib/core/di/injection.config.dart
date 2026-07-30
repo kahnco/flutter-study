@@ -40,13 +40,13 @@ extension GetItInjectableX on _i174.GetIt {
     _i526.EnvironmentFilter? environmentFilter,
   }) {
     final gh = _i526.GetItHelper(this, environment, environmentFilter);
+    gh.lazySingleton<_i350.TodoLocalDataSource>(
+      () => _i350.InMemoryTodoLocalDataSource(),
+      registerFor: {_prod, _fake},
+    );
     gh.lazySingleton<_i405.Clock>(
       () => _i405.SystemClock(),
       registerFor: {_prod},
-    );
-    gh.lazySingleton<_i350.TodoLocalDataSource>(
-      () => _i350.InMemoryTodoLocalDataSource(),
-      registerFor: {_fake},
     );
     gh.lazySingleton<_i405.Clock>(
       () => _i405.FixedClock(),

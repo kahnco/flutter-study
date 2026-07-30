@@ -7,9 +7,9 @@ abstract interface class TodoLocalDataSource {
   Future<void> writeAll(List<TodoModel> todos);
 }
 
-/// 인메모리 구현. 테스트·데모(fake)용 — 프로세스가 살아있는 동안만 유지된다.
-/// 실제 영속(prod) 어댑터는 다음 편에서 붙인다.
-@LazySingleton(as: TodoLocalDataSource, env: ['fake'])
+/// 인메모리 구현. 프로세스가 살아있는 동안만 유지된다 — 재시작하면 사라진다.
+/// 지금은 prod 도 이걸 쓴다. 실제 영속(디스크) 어댑터로 prod 를 가르는 건 다음 편.
+@LazySingleton(as: TodoLocalDataSource, env: ['prod', 'fake'])
 class InMemoryTodoLocalDataSource implements TodoLocalDataSource {
   final List<TodoModel> _store = [];
 
