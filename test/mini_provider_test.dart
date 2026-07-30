@@ -72,20 +72,17 @@ void main() {
         create: CounterStore.new,
         child: Builder(builder: (context) {
           hostBuilds++;
-          // read 로 store 를 꺼내 콜백에 씀 — 이 위젯은 구독하지 않는다
+          // read 로 store 를 꺼낸다 — onPressed 콜백에서 쓰는 그 패턴. 이 위젯은 구독하지 않는다.
           captured = context.read<CounterStore>();
-          return GestureDetector(
-            onTap: captured.increment,
-            child: const SizedBox(width: 100, height: 100), // 탭이 확실히 닿도록 크기 부여
-          );
+          return const SizedBox();
         }),
       ),
     ));
 
     expect(hostBuilds, 1);
 
-    // 탭 → store 증가(콜백에서 read 로 꺼낸 store 가 동작). 하지만 이 위젯은 watch 를 안 했으니 리빌드 안 됨.
-    await tester.tap(find.byType(GestureDetector));
+    // read 로 꺼낸 store 로 값을 바꾼다(콜백에서 하는 일). 이 위젯은 watch 를 안 했으니 리빌드 안 됨.
+    captured.increment();
     await tester.pump();
 
     expect(captured.count, 1, reason: 'read 로 꺼낸 store 로 값이 실제로 바뀐다');
