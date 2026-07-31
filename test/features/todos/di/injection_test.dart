@@ -10,7 +10,7 @@ void main() {
   tearDown(() => getIt.reset());
 
   test('fake 환경: 그래프 전체가 인메모리 어댑터로 해소된다', () async {
-    configureDependencies(environment: 'fake');
+    await configureDependencies(environment: 'fake');
 
     expect(getIt<Clock>(), isA<FixedClock>());
     expect(getIt<IdGenerator>(), isA<SequentialIdGenerator>());

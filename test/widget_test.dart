@@ -8,6 +8,8 @@ import 'package:flutter_study/features/todos/presentation/widgets/todos_scope.da
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  // configureDependencies 는 이제 Future 를 돌려준다. setUp 이 그 Future 를
+  // 기다려 주므로, 화면을 띄우기 전에 그래프가 준비된다.
   setUp(() => configureDependencies(environment: 'fake'));
   tearDown(() => getIt.reset());
 

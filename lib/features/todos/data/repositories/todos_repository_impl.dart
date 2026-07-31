@@ -39,8 +39,7 @@ class TodosRepositoryImpl implements TodosRepository {
         completed: false,
         createdAt: _clock.now(),
       );
-      final next = [...await _local.readAll(), TodoModel.fromDomain(todo)];
-      await _local.writeAll(next);
+      await _local.insert(TodoModel.fromDomain(todo));
       return right(todo);
     } catch (_) {
       return left(const CacheFailure());
@@ -50,11 +49,10 @@ class TodosRepositoryImpl implements TodosRepository {
   @override
   Future<Either<Failure, Unit>> toggle(String id) async {
     try {
-      final models = await _local.readAll();
-      final next = models
-          .map((m) => m.id == id ? m.copyWith(completed: !m.completed) : m)
-          .toList();
-      await _local.writeAll(next);
+      final matches = (await _local.readAll()).where((m) => m.id == id);
+      if (matches.isEmpty) return left(const CacheFailure('없는 항목입니다'));
+      final target = matches.first;
+      await _local.update(target.copyWith(completed: !target.completed));
       return right(unit);
     } catch (_) {
       return left(const CacheFailure());
@@ -64,8 +62,7 @@ class TodosRepositoryImpl implements TodosRepository {
   @override
   Future<Either<Failure, Unit>> remove(String id) async {
     try {
-      final next = (await _local.readAll()).where((m) => m.id != id).toList();
-      await _local.writeAll(next);
+      await _local.delete(id);
       return right(unit);
     } catch (_) {
       return left(const CacheFailure());

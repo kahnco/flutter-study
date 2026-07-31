@@ -12,7 +12,11 @@ class _ThrowingDataSource implements TodoLocalDataSource {
   @override
   Future<List<TodoModel>> readAll() async => throw Exception('disk');
   @override
-  Future<void> writeAll(List<TodoModel> todos) async => throw Exception('disk');
+  Future<void> insert(TodoModel todo) async => throw Exception('disk');
+  @override
+  Future<void> update(TodoModel todo) async => throw Exception('disk');
+  @override
+  Future<void> delete(String id) async => throw Exception('disk');
 }
 
 void main() {
