@@ -8,6 +8,7 @@ import 'package:flutter_study/features/todos/domain/usecases/remove_todo.dart';
 import 'package:flutter_study/features/todos/domain/usecases/toggle_todo.dart';
 import 'package:flutter_study/features/todos/presentation/bloc/todos_bloc.dart';
 import 'package:flutter_study/features/todos/presentation/bloc/todos_event.dart';
+import 'package:flutter_study/features/todos/presentation/bloc/todos_filter.dart';
 import 'package:flutter_study/features/todos/presentation/bloc/todos_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -103,5 +104,67 @@ void main() {
       ..add(const TodosStarted())
       ..add(const TodoAdded('버릴 것'))
       ..add(const TodoRemoved('id-1'));
+  });
+
+  test('필터를 바꾸면 저장소는 그대로고 보이는 목록만 좁아진다', () {
+    expectLater(
+      bloc.stream,
+      emitsInOrder([
+        isA<TodosLoading>(),
+        isA<TodosLoaded>(),
+        isA<TodosLoaded>().having((s) => s.todos.length, 'length', 1), // 추가
+        isA<TodosLoaded>().having((s) => s.todos.single.completed, 'done', true),
+        // 미완료 필터: 전체 목록(todos)은 1건 그대로, 보이는 건 0건
+        isA<TodosLoaded>()
+            .having((s) => s.todos.length, 'todos', 1)
+            .having((s) => s.visibleTodos, 'visible', isEmpty),
+      ]),
+    );
+    bloc
+      ..add(const TodosStarted())
+      ..add(const TodoAdded('청소'))
+      ..add(const TodoToggled('id-1')) // 완료로
+      ..add(const FilterChanged(TodosFilter.active)); // 미완료만 → 안 보임
+  });
+
+  test('검색어를 바꾸면 매칭되는 것만 보인다', () {
+    expectLater(
+      bloc.stream,
+      emitsInOrder([
+        isA<TodosLoading>(),
+        isA<TodosLoaded>(),
+        isA<TodosLoaded>().having((s) => s.todos.length, 'length', 1),
+        isA<TodosLoaded>().having((s) => s.todos.length, 'length', 2),
+        isA<TodosLoaded>()
+            .having((s) => s.query, 'query', '우유')
+            .having((s) => s.visibleTodos.map((t) => t.title.value).toList(),
+                'visible', ['우유 사기']),
+      ]),
+    );
+    bloc
+      ..add(const TodosStarted())
+      ..add(const TodoAdded('우유 사기'))
+      ..add(const TodoAdded('청소하기'))
+      ..add(const SearchChanged('우유'));
+  });
+
+  test('추가해도 현재 필터·검색어는 유지된다', () {
+    expectLater(
+      bloc.stream,
+      emitsInOrder([
+        isA<TodosLoading>(),
+        isA<TodosLoaded>(),
+        // 검색어 설정(빈 목록)
+        isA<TodosLoaded>().having((s) => s.query, 'query', '청소'),
+        // 추가 후에도 query 가 남아 있어야 한다
+        isA<TodosLoaded>()
+            .having((s) => s.query, 'query', '청소')
+            .having((s) => s.todos.length, 'length', 1),
+      ]),
+    );
+    bloc
+      ..add(const TodosStarted())
+      ..add(const SearchChanged('청소'))
+      ..add(const TodoAdded('청소하기'));
   });
 }

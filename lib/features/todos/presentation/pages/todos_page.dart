@@ -4,6 +4,8 @@ import 'package:flutter_study/features/todos/presentation/bloc/todos_state.dart'
 import 'package:flutter_study/features/todos/presentation/widgets/todo_input_field.dart';
 import 'package:flutter_study/features/todos/presentation/widgets/todo_list_view.dart';
 import 'package:flutter_study/features/todos/presentation/widgets/todos_bloc_provider.dart';
+import 'package:flutter_study/features/todos/presentation/widgets/todos_filter_bar.dart';
+import 'package:flutter_study/features/todos/presentation/widgets/todos_search_field.dart';
 
 /// 할 일 화면. 스스로 상태를 들지 않고, bloc 의 [state] 스트림을 구독해
 /// **완결된 한 장면**을 sealed 상태에 따라 그린다. 사용자 동작은 이벤트로 되던진다.
@@ -36,10 +38,25 @@ class TodosPage extends StatelessWidget {
                   ],
                 ),
               ),
-            TodosLoaded(:final todos, :final error) => Column(
+            TodosLoaded(
+              :final todos,
+              :final visibleTodos,
+              :final filter,
+              :final error,
+            ) =>
+              Column(
                 children: [
                   TodoInputField(error: error),
-                  Expanded(child: TodoListView(todos: todos)),
+                  const TodosSearchField(),
+                  TodosFilterBar(filter: filter),
+                  Expanded(
+                    child: TodoListView(
+                      todos: visibleTodos,
+                      emptyLabel: todos.isEmpty
+                          ? '할 일이 없습니다. 위에서 추가해 보세요.'
+                          : '조건에 맞는 할 일이 없습니다.',
+                    ),
+                  ),
                 ],
               ),
           };

@@ -10,6 +10,7 @@ import 'package:flutter_study/features/todos/domain/usecases/remove_todo.dart';
 import 'package:flutter_study/features/todos/domain/usecases/toggle_todo.dart';
 import 'package:flutter_study/features/todos/domain/value_objects/todo_title.dart';
 import 'package:flutter_study/features/todos/presentation/bloc/todos_event.dart';
+import 'package:flutter_study/features/todos/presentation/bloc/todos_filter.dart';
 import 'package:flutter_study/features/todos/presentation/bloc/todos_state.dart';
 
 /// BLoC 패턴을 패키지 없이 직접 구현한다.
@@ -70,6 +71,17 @@ class TodosBloc {
         await _mutate(await _toggleTodo(id));
       case TodoRemoved(:final id):
         await _mutate(await _removeTodo(id));
+      case FilterChanged(:final filter):
+        // 저장소를 건드리지 않는 화면 상태 변경 — 현재 목록에 필터만 갈아 끼운다.
+        final now = _current;
+        if (now is TodosLoaded) {
+          _emit(TodosLoaded(now.todos, filter: filter, query: now.query));
+        }
+      case SearchChanged(:final query):
+        final now = _current;
+        if (now is TodosLoaded) {
+          _emit(TodosLoaded(now.todos, filter: now.filter, query: query));
+        }
     }
   }
 
@@ -89,19 +101,24 @@ class TodosBloc {
       );
 
   /// 목록을 다시 읽어 성공/실패 상태로 방출한다(단일 진실원천).
+  /// 재적재 뒤에도 현재 필터·검색어는 이어 간다(추가/토글이 뷰를 리셋하지 않게).
   Future<void> _reload() async {
+    final now = _current;
+    final filter = now is TodosLoaded ? now.filter : TodosFilter.all;
+    final query = now is TodosLoaded ? now.query : '';
     final result = await _getTodos(const NoParams());
     result.match(
       (failure) => _emit(TodosFailure(failure.message)),
-      (todos) => _emit(TodosLoaded(todos)),
+      (todos) => _emit(TodosLoaded(todos, filter: filter, query: query)),
     );
   }
 
-  /// 목록은 유지하고 화면에 한 줄짜리 오류만 얹는다.
+  /// 목록·필터·검색어는 유지하고 화면에 한 줄짜리 오류만 얹는다.
   void _showError(String message) {
     final now = _current;
     _emit(now is TodosLoaded
-        ? now.copyWith(error: message)
+        ? TodosLoaded(now.todos,
+            filter: now.filter, query: now.query, error: message)
         : TodosFailure(message));
   }
 

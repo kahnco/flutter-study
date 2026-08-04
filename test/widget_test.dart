@@ -3,8 +3,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_study/core/di/injection.dart';
 import 'package:flutter_study/features/todos/presentation/pages/todos_page.dart';
+import 'package:flutter_study/features/todos/presentation/widgets/todo_input_field.dart';
 import 'package:flutter_study/features/todos/presentation/widgets/todo_tile.dart';
 import 'package:flutter_study/features/todos/presentation/widgets/todos_scope.dart';
+import 'package:flutter_study/features/todos/presentation/widgets/todos_search_field.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -13,11 +15,27 @@ void main() {
   setUp(() => configureDependencies(environment: 'fake'));
   tearDown(() => getIt.reset());
 
+  // 화면에 TextField 가 둘(입력·검색)이라, 각각을 조상 위젯으로 특정한다.
+  final addField = find.descendant(
+    of: find.byType(TodoInputField),
+    matching: find.byType(TextField),
+  );
+  final searchField = find.descendant(
+    of: find.byType(TodosSearchField),
+    matching: find.byType(TextField),
+  );
+
   Future<void> pumpApp(WidgetTester tester) async {
     await tester.pumpWidget(
       const MaterialApp(home: TodosScope(child: TodosPage())),
     );
     await tester.pumpAndSettle(); // TodosStarted → 빈 목록까지
+  }
+
+  Future<void> addTodo(WidgetTester tester, String title) async {
+    await tester.enterText(addField, title);
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pumpAndSettle();
   }
 
   testWidgets('처음엔 빈 목록 안내가 뜬다', (tester) async {
@@ -29,9 +47,7 @@ void main() {
   testWidgets('입력하고 추가하면 목록에 뜬다', (tester) async {
     await pumpApp(tester);
 
-    await tester.enterText(find.byType(TextField), '우유 사기');
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pumpAndSettle();
+    await addTodo(tester, '우유 사기');
 
     expect(find.text('우유 사기'), findsOneWidget);
     expect(find.byType(TodoTile), findsOneWidget);
@@ -50,9 +66,7 @@ void main() {
   testWidgets('체크박스를 누르면 완료로 토글된다', (tester) async {
     await pumpApp(tester);
 
-    await tester.enterText(find.byType(TextField), '청소');
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pumpAndSettle();
+    await addTodo(tester, '청소');
 
     await tester.tap(find.byType(Checkbox));
     await tester.pumpAndSettle();
@@ -64,13 +78,46 @@ void main() {
   testWidgets('휴지통을 누르면 목록에서 사라진다', (tester) async {
     await pumpApp(tester);
 
-    await tester.enterText(find.byType(TextField), '버릴 것');
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pumpAndSettle();
+    await addTodo(tester, '버릴 것');
     expect(find.byType(TodoTile), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.delete_outline));
     await tester.pumpAndSettle();
     expect(find.byType(TodoTile), findsNothing);
+  });
+
+  testWidgets('검색어를 입력하면 목록이 좁아진다', (tester) async {
+    await pumpApp(tester);
+    await addTodo(tester, '우유 사기');
+    await addTodo(tester, '청소하기');
+    expect(find.byType(TodoTile), findsNWidgets(2));
+
+    await tester.enterText(searchField, '우유');
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TodoTile), findsOneWidget);
+    expect(find.text('우유 사기'), findsOneWidget);
+    expect(find.text('청소하기'), findsNothing);
+  });
+
+  testWidgets('필터 탭을 누르면 완료/미완료로 걸러진다', (tester) async {
+    await pumpApp(tester);
+    await addTodo(tester, '우유 사기');
+    await addTodo(tester, '청소하기');
+
+    // 첫 항목만 완료 처리
+    await tester.tap(find.byType(Checkbox).first);
+    await tester.pumpAndSettle();
+
+    // '완료' 탭 → 완료된 것만
+    await tester.tap(find.text('완료'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TodoTile), findsOneWidget);
+
+    // '미완료' 탭 → 미완료만
+    await tester.tap(find.text('미완료'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TodoTile), findsOneWidget);
+    expect(find.text('청소하기'), findsOneWidget);
   });
 }
