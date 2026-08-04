@@ -86,13 +86,19 @@ void main() {
     expect(find.byType(TodoTile), findsNothing);
   });
 
-  testWidgets('검색어를 입력하면 목록이 좁아진다', (tester) async {
+  testWidgets('검색어를 입력하면(디바운스 뒤) 목록이 좁아진다', (tester) async {
     await pumpApp(tester);
     await addTodo(tester, '우유 사기');
     await addTodo(tester, '청소하기');
     expect(find.byType(TodoTile), findsNWidgets(2));
 
     await tester.enterText(searchField, '우유');
+    // 디바운스(기본 300ms) 전에는 아직 그대로다.
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byType(TodoTile), findsNWidgets(2));
+
+    // 디바운스 경과 → 질의 → 결과 반영.
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
 
     expect(find.byType(TodoTile), findsOneWidget);

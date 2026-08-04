@@ -7,6 +7,7 @@ import 'package:flutter_study/features/todos/data/datasources/todo_local_data_so
 import 'package:flutter_study/features/todos/data/models/todo_model.dart';
 import 'package:flutter_study/features/todos/domain/entities/todo.dart';
 import 'package:flutter_study/features/todos/domain/repositories/todos_repository.dart';
+import 'package:flutter_study/features/todos/domain/value_objects/todo_query.dart';
 import 'package:flutter_study/features/todos/domain/value_objects/todo_title.dart';
 
 /// 도메인 계약을 로컬 저장소로 실현한다.
@@ -21,9 +22,9 @@ class TodosRepositoryImpl implements TodosRepository {
   final Clock _clock;
 
   @override
-  Future<Either<Failure, List<Todo>>> getAll() async {
+  Future<Either<Failure, List<Todo>>> search(TodoQuery query) async {
     try {
-      final models = await _local.readAll();
+      final models = await _local.search(query);
       return right(models.map((m) => m.toDomain()).toList());
     } catch (_) {
       return left(const CacheFailure());

@@ -2,6 +2,8 @@ import 'package:injectable/injectable.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:flutter_study/features/todos/data/datasources/todo_local_data_source.dart';
 import 'package:flutter_study/features/todos/data/models/todo_model.dart';
+import 'package:flutter_study/features/todos/domain/value_objects/todo_query.dart';
+import 'package:flutter_study/features/todos/domain/value_objects/todos_filter.dart';
 
 /// todos 테이블 스키마. 모듈(생성 시)과 테스트가 같은 정의를 쓰도록 한곳에 둔다.
 /// completed 는 SQLite 에 boolean 이 없어 0/1 정수로, created_at 은 epoch millis 로.
@@ -28,6 +30,41 @@ class SqfliteTodoLocalDataSource implements TodoLocalDataSource {
   Future<List<TodoModel>> readAll() async {
     // 삽입 순서를 유지하려 created_at 동률이면 rowid 로 갈음한다.
     final rows = await _db.query(todosTable, orderBy: 'created_at ASC, rowid ASC');
+    return rows.map(_fromRow).toList();
+  }
+
+  @override
+  Future<List<TodoModel>> search(TodoQuery query) async {
+    // 필터·검색을 메모리가 아니라 SQL WHERE/LIKE 로 내린다(7편).
+    final clauses = <String>[];
+    final args = <Object?>[];
+
+    switch (query.status) {
+      case TodosFilter.active:
+        clauses.add('completed = 0');
+      case TodosFilter.completed:
+        clauses.add('completed = 1');
+      case TodosFilter.all:
+        break;
+    }
+
+    final text = query.text.trim();
+    if (text.isNotEmpty) {
+      // LIKE 의 와일드카드(%, _)를 사용자 입력에서 이스케이프한다.
+      final escaped = text.replaceAllMapped(
+        RegExp(r'[%_\\]'),
+        (m) => '\\${m[0]}',
+      );
+      clauses.add("title LIKE ? ESCAPE '\\'");
+      args.add('%$escaped%');
+    }
+
+    final rows = await _db.query(
+      todosTable,
+      where: clauses.isEmpty ? null : clauses.join(' AND '),
+      whereArgs: args.isEmpty ? null : args,
+      orderBy: 'created_at ASC, rowid ASC',
+    );
     return rows.map(_fromRow).toList();
   }
 

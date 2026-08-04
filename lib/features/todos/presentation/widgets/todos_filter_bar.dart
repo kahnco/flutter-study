@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_study/features/todos/domain/value_objects/todos_filter.dart';
 import 'package:flutter_study/features/todos/presentation/bloc/todos_event.dart';
-import 'package:flutter_study/features/todos/presentation/bloc/todos_filter.dart';
+import 'package:flutter_study/features/todos/presentation/todos_filter_label.dart';
 import 'package:flutter_study/features/todos/presentation/widgets/todos_bloc_provider.dart';
 
 /// 완료 상태 필터 탭(전체·미완료·완료). 현재 선택은 [filter] 로 받아 표시하고,

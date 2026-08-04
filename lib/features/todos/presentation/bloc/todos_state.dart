@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_study/features/todos/domain/entities/todo.dart';
-import 'package:flutter_study/features/todos/presentation/bloc/todos_filter.dart';
+import 'package:flutter_study/features/todos/domain/value_objects/todos_filter.dart';
 
 /// bloc 에서 나오는 출력. 화면이 그릴 수 있는 **완결된** 한 장면.
 sealed class TodosState extends Equatable {
@@ -20,9 +20,9 @@ class TodosLoading extends TodosState {
   const TodosLoading();
 }
 
-/// 목록이 준비된 상태. [todos] 는 **전체**이고, [filter]·[query] 로 [visibleTodos]
-/// 를 파생한다 — 저장소는 그대로 두고 보이는 것만 좁히는 프레젠테이션 관심사다.
-/// [error] 는 방금 동작이 어긋났을 때만 실리는 **일시적** 메시지(다음 성공에 사라짐).
+/// 목록이 준비된 상태. [todos] 는 **이미 조건([filter]·[query])으로 걸러진** 결과다
+/// (7편부터 필터·검색을 SQL 조회로 내렸으므로 화면은 이걸 그대로 그린다).
+/// [error] 는 방금 동작이 어긋났을 때만 실리는 일시적 메시지(다음 성공에 사라짐).
 class TodosLoaded extends TodosState {
   const TodosLoaded(
     this.todos, {
@@ -36,23 +36,8 @@ class TodosLoaded extends TodosState {
   final String query;
   final String? error;
 
-  /// 필터 탭과 검색어를 전체 목록에 적용한 결과(대소문자 무시, 공백 다듬음).
-  List<Todo> get visibleTodos {
-    final needle = query.trim().toLowerCase();
-    return todos.where((t) {
-      final matchesFilter = switch (filter) {
-        TodosFilter.all => true,
-        TodosFilter.active => !t.completed,
-        TodosFilter.completed => t.completed,
-      };
-      final matchesQuery =
-          needle.isEmpty || t.title.value.toLowerCase().contains(needle);
-      return matchesFilter && matchesQuery;
-    }).toList();
-  }
-
-  /// 남은(미완료) 할 일 수 — 화면 요약에 쓴다.
-  int get activeCount => todos.where((t) => !t.completed).length;
+  /// 조건이 걸려 있는가 — "결과 없음" 안내 문구를 가르는 데 쓴다.
+  bool get isFiltered => filter != TodosFilter.all || query.trim().isNotEmpty;
 
   @override
   List<Object?> get props => [todos, filter, query, error];

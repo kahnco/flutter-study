@@ -38,23 +38,17 @@ class TodosPage extends StatelessWidget {
                   ],
                 ),
               ),
-            TodosLoaded(
-              :final todos,
-              :final visibleTodos,
-              :final filter,
-              :final error,
-            ) =>
-              Column(
+            final TodosLoaded loaded => Column(
                 children: [
-                  TodoInputField(error: error),
+                  TodoInputField(error: loaded.error),
                   const TodosSearchField(),
-                  TodosFilterBar(filter: filter),
+                  TodosFilterBar(filter: loaded.filter),
                   Expanded(
                     child: TodoListView(
-                      todos: visibleTodos,
-                      emptyLabel: todos.isEmpty
-                          ? '할 일이 없습니다. 위에서 추가해 보세요.'
-                          : '조건에 맞는 할 일이 없습니다.',
+                      todos: loaded.todos,
+                      emptyLabel: loaded.isFiltered
+                          ? '조건에 맞는 할 일이 없습니다.'
+                          : '할 일이 없습니다. 위에서 추가해 보세요.',
                     ),
                   ),
                 ],

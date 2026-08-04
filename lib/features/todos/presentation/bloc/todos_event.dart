@@ -1,5 +1,5 @@
 import 'package:equatable/equatable.dart';
-import 'package:flutter_study/features/todos/presentation/bloc/todos_filter.dart';
+import 'package:flutter_study/features/todos/domain/value_objects/todos_filter.dart';
 
 /// bloc 으로 들어가는 입력. 화면은 이 이벤트만 던지고, 로직은 몰라도 된다.
 /// sealed 라서 bloc 의 처리부에서 하나라도 빠뜨리면 컴파일러가 잡는다.
@@ -49,11 +49,17 @@ class FilterChanged extends TodosEvent {
   List<Object?> get props => [filter];
 }
 
-/// 제목 검색어를 바꾼다(날것 문자열). 필터와 함께 보이는 목록을 좁힌다.
+/// 제목 검색어를 바꾼다(날것 문자열). 즉시 질의하지 않고 bloc 이 디바운스한다.
 class SearchChanged extends TodosEvent {
   const SearchChanged(this.query);
   final String query;
 
   @override
   List<Object?> get props => [query];
+}
+
+/// 디바운스 타이머가 깨어 "지금 조건으로 다시 질의하라"고 요청하는 내부 이벤트.
+/// 화면이 던지는 게 아니라 bloc 이 스스로 큐에 넣는다(순차 처리 유지).
+class QueryRefreshed extends TodosEvent {
+  const QueryRefreshed();
 }

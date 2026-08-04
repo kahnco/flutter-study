@@ -6,9 +6,9 @@ import 'package:flutter_study/features/todos/domain/usecases/add_todo.dart';
 import 'package:flutter_study/features/todos/domain/usecases/get_todos.dart';
 import 'package:flutter_study/features/todos/domain/usecases/remove_todo.dart';
 import 'package:flutter_study/features/todos/domain/usecases/toggle_todo.dart';
+import 'package:flutter_study/features/todos/domain/value_objects/todos_filter.dart';
 import 'package:flutter_study/features/todos/presentation/bloc/todos_bloc.dart';
 import 'package:flutter_study/features/todos/presentation/bloc/todos_event.dart';
-import 'package:flutter_study/features/todos/presentation/bloc/todos_filter.dart';
 import 'package:flutter_study/features/todos/presentation/bloc/todos_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -24,10 +24,18 @@ void main() {
       AddTodo(repo),
       ToggleTodo(repo),
       RemoveTodo(repo),
-    );
+    )..searchDebounce = Duration.zero; // 테스트에선 디바운스를 즉시로
   });
 
   tearDown(() => bloc.dispose());
+
+  // 디바운스(타이머)가 끼면 emitsInOrder 는 순서가 흔들린다. 그래서 원하는
+  // 상태가 나올 때까지 기다리는 헬퍼로, 단계마다 확정한 뒤 다음을 던진다.
+  Future<TodosLoaded> nextLoaded(bool Function(TodosLoaded) predicate) => bloc
+      .stream
+      .where((s) => s is TodosLoaded && predicate(s))
+      .cast<TodosLoaded>()
+      .first;
 
   test('시작하면 로딩을 거쳐 빈 목록으로 간다', () {
     expectLater(
@@ -106,65 +114,53 @@ void main() {
       ..add(const TodoRemoved('id-1'));
   });
 
-  test('필터를 바꾸면 저장소는 그대로고 보이는 목록만 좁아진다', () {
-    expectLater(
-      bloc.stream,
-      emitsInOrder([
-        isA<TodosLoading>(),
-        isA<TodosLoaded>(),
-        isA<TodosLoaded>().having((s) => s.todos.length, 'length', 1), // 추가
-        isA<TodosLoaded>().having((s) => s.todos.single.completed, 'done', true),
-        // 미완료 필터: 전체 목록(todos)은 1건 그대로, 보이는 건 0건
-        isA<TodosLoaded>()
-            .having((s) => s.todos.length, 'todos', 1)
-            .having((s) => s.visibleTodos, 'visible', isEmpty),
-      ]),
-    );
-    bloc
-      ..add(const TodosStarted())
-      ..add(const TodoAdded('청소'))
-      ..add(const TodoToggled('id-1')) // 완료로
-      ..add(const FilterChanged(TodosFilter.active)); // 미완료만 → 안 보임
+  test('필터를 바꾸면 SQL 조회로 완료/미완료만 돌아온다', () async {
+    final started = nextLoaded((s) => s.todos.isEmpty);
+    bloc.add(const TodosStarted());
+    await started;
+
+    final added = nextLoaded((s) => s.todos.length == 1);
+    bloc.add(const TodoAdded('청소'));
+    await added;
+
+    final toggled = nextLoaded((s) => s.todos.single.completed);
+    bloc.add(const TodoToggled('id-1'));
+    await toggled;
+
+    // 미완료 필터 → 완료된 항목은 조회 결과에서 빠진다.
+    final filtered = nextLoaded((s) => s.filter == TodosFilter.active);
+    bloc.add(const FilterChanged(TodosFilter.active));
+    expect((await filtered).todos, isEmpty);
   });
 
-  test('검색어를 바꾸면 매칭되는 것만 보인다', () {
-    expectLater(
-      bloc.stream,
-      emitsInOrder([
-        isA<TodosLoading>(),
-        isA<TodosLoaded>(),
-        isA<TodosLoaded>().having((s) => s.todos.length, 'length', 1),
-        isA<TodosLoaded>().having((s) => s.todos.length, 'length', 2),
-        isA<TodosLoaded>()
-            .having((s) => s.query, 'query', '우유')
-            .having((s) => s.visibleTodos.map((t) => t.title.value).toList(),
-                'visible', ['우유 사기']),
-      ]),
-    );
+  test('검색어를 디바운스 뒤 SQL LIKE 로 걸러 온다', () async {
+    final started = nextLoaded((s) => s.todos.isEmpty);
+    bloc.add(const TodosStarted());
+    await started;
+
+    final two = nextLoaded((s) => s.todos.length == 2);
     bloc
-      ..add(const TodosStarted())
       ..add(const TodoAdded('우유 사기'))
-      ..add(const TodoAdded('청소하기'))
-      ..add(const SearchChanged('우유'));
+      ..add(const TodoAdded('청소하기'));
+    await two;
+
+    final searched = nextLoaded((s) => s.query == '우유');
+    bloc.add(const SearchChanged('우유'));
+    final result = await searched;
+    expect(result.todos.map((t) => t.title.value).toList(), ['우유 사기']);
   });
 
-  test('추가해도 현재 필터·검색어는 유지된다', () {
-    expectLater(
-      bloc.stream,
-      emitsInOrder([
-        isA<TodosLoading>(),
-        isA<TodosLoaded>(),
-        // 검색어 설정(빈 목록)
-        isA<TodosLoaded>().having((s) => s.query, 'query', '청소'),
-        // 추가 후에도 query 가 남아 있어야 한다
-        isA<TodosLoaded>()
-            .having((s) => s.query, 'query', '청소')
-            .having((s) => s.todos.length, 'length', 1),
-      ]),
-    );
-    bloc
-      ..add(const TodosStarted())
-      ..add(const SearchChanged('청소'))
-      ..add(const TodoAdded('청소하기'));
+  test('검색 중 추가해도 검색어가 유지되고 결과가 갱신된다', () async {
+    final started = nextLoaded((s) => s.todos.isEmpty);
+    bloc.add(const TodosStarted());
+    await started;
+
+    final searched = nextLoaded((s) => s.query == '청소');
+    bloc.add(const SearchChanged('청소'));
+    await searched; // 아직 항목 없음 → 빈 결과, query 는 '청소'
+
+    final afterAdd = nextLoaded((s) => s.query == '청소' && s.todos.length == 1);
+    bloc.add(const TodoAdded('청소하기'));
+    expect((await afterAdd).todos.single.title.value, '청소하기');
   });
 }

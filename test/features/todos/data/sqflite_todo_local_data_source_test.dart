@@ -2,6 +2,8 @@
 // 도는지 본다. 앱의 prod 경로와 같은 코드(insert/update/delete/readAll)를 태운다.
 import 'package:flutter_study/features/todos/data/datasources/sqflite_todo_local_data_source.dart';
 import 'package:flutter_study/features/todos/data/models/todo_model.dart';
+import 'package:flutter_study/features/todos/domain/value_objects/todo_query.dart';
+import 'package:flutter_study/features/todos/domain/value_objects/todos_filter.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -67,5 +69,44 @@ void main() {
     await ds.insert(model('id-1', completed: true));
     final raw = await db.query(todosTable);
     expect(raw.single['completed'], 1);
+  });
+
+  // 제목을 지정해 넣는 헬퍼(검색 테스트용).
+  TodoModel titled(String id, String title, {bool completed = false}) =>
+      TodoModel(
+          id: id, title: title, completed: completed, createdAtMillis: 0);
+
+  group('search — SQL WHERE/LIKE', () {
+    test('status=active 는 completed=0 만 (WHERE)', () async {
+      await ds.insert(titled('1', '가', completed: true));
+      await ds.insert(titled('2', '나'));
+      final rows = await ds.search(const TodoQuery(status: TodosFilter.active));
+      expect(rows.map((m) => m.id).toList(), ['2']);
+    });
+
+    test('제목 LIKE 로 부분 일치를 찾는다', () async {
+      await ds.insert(titled('1', '우유 사기'));
+      await ds.insert(titled('2', '청소하기'));
+      await ds.insert(titled('3', '우유 데우기'));
+      final rows = await ds.search(const TodoQuery(text: '우유'));
+      expect(rows.map((m) => m.id).toList(), ['1', '3']);
+    });
+
+    test('필터와 검색어는 AND 로 함께 적용된다', () async {
+      await ds.insert(titled('1', '우유 사기', completed: true));
+      await ds.insert(titled('2', '우유 데우기'));
+      final rows = await ds.search(
+        const TodoQuery(status: TodosFilter.active, text: '우유'),
+      );
+      expect(rows.map((m) => m.id).toList(), ['2']);
+    });
+
+    test('LIKE 와일드카드(%)는 리터럴로 이스케이프된다', () async {
+      await ds.insert(titled('1', '50% 할인'));
+      await ds.insert(titled('2', '무엇이든'));
+      // '%' 를 와일드카드로 봤다면 둘 다 걸리지만, 이스케이프되므로 1건만.
+      final rows = await ds.search(const TodoQuery(text: '%'));
+      expect(rows.map((m) => m.id).toList(), ['1']);
+    });
   });
 }
