@@ -6,6 +6,7 @@ import 'package:flutter_study/features/todos/domain/usecases/add_todo.dart';
 import 'package:flutter_study/features/todos/domain/usecases/get_todos.dart';
 import 'package:flutter_study/features/todos/domain/usecases/remove_todo.dart';
 import 'package:flutter_study/features/todos/domain/usecases/toggle_todo.dart';
+import 'package:flutter_study/features/todos/domain/value_objects/todo_title.dart';
 import 'package:flutter_study/features/todos/domain/value_objects/todos_filter.dart';
 import 'package:flutter_study/features/todos/presentation/bloc/todos_bloc.dart';
 import 'package:flutter_study/features/todos/presentation/bloc/todos_event.dart';
@@ -162,5 +163,70 @@ void main() {
     final afterAdd = nextLoaded((s) => s.query == '청소' && s.todos.length == 1);
     bloc.add(const TodoAdded('청소하기'));
     expect((await afterAdd).todos.single.title.value, '청소하기');
+  });
+
+  group('페이징', () {
+    // 시드된 저장소 위에 작은 pageSize 로 별도 bloc 을 세운다.
+    late TodosBloc paged;
+
+    Future<void> seed(int count) async {
+      final local = InMemoryTodoLocalDataSource();
+      final repo =
+          TodosRepositoryImpl(local, SequentialIdGenerator(), FixedClock());
+      for (var i = 0; i < count; i++) {
+        await repo.add(TodoTitle.trusted('할 일 $i'));
+      }
+      paged = TodosBloc(
+        GetTodos(repo),
+        AddTodo(repo),
+        ToggleTodo(repo),
+        RemoveTodo(repo),
+      )..pageSize = 2;
+    }
+
+    Future<TodosLoaded> waitOn(bool Function(TodosLoaded) p) => paged.stream
+        .where((s) => s is TodosLoaded && p(s))
+        .cast<TodosLoaded>()
+        .first;
+
+    tearDown(() => paged.dispose());
+
+    test('첫 페이지는 pageSize 만큼, hasMore 로 더 있음을 알린다', () async {
+      await seed(3);
+      final first = waitOn((s) => s.todos.isNotEmpty);
+      paged.add(const TodosStarted());
+      final page1 = await first;
+      expect(page1.todos.length, 2);
+      expect(page1.hasMore, isTrue);
+    });
+
+    test('다음 페이지를 요청하면 이어 붙고, 끝나면 hasMore=false', () async {
+      await seed(3);
+      final first = waitOn((s) => s.todos.length == 2);
+      paged.add(const TodosStarted());
+      await first;
+
+      final second = waitOn((s) => s.todos.length == 3);
+      paged.add(const NextPageRequested());
+      final page2 = await second;
+      expect(page2.hasMore, isFalse);
+      expect(page2.todos.map((t) => t.title.value).toList(),
+          ['할 일 0', '할 일 1', '할 일 2']);
+    });
+
+    test('더 없으면 NextPageRequested 는 무시된다', () async {
+      await seed(1); // 한 건뿐 → hasMore=false
+      final first = waitOn((s) => s.todos.length == 1);
+      paged.add(const TodosStarted());
+      final page1 = await first;
+      expect(page1.hasMore, isFalse);
+
+      // 무시되어야 하므로, 다른 이벤트로 상태가 한 번만 더 바뀌는지로 확인.
+      paged.add(const NextPageRequested());
+      final afterFilter = waitOn((s) => s.filter == TodosFilter.completed);
+      paged.add(const FilterChanged(TodosFilter.completed));
+      // 완료 항목이 없으니 빈 목록. NextPage 가 뭔가 했다면 여기 안 온다.
+      expect((await afterFilter).todos, isEmpty);
+    });
   });
 }

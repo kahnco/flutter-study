@@ -63,3 +63,8 @@ class SearchChanged extends TodosEvent {
 class QueryRefreshed extends TodosEvent {
   const QueryRefreshed();
 }
+
+/// 리스트가 바닥에 닿아 다음 페이지를 요청한다(무한 스크롤).
+class NextPageRequested extends TodosEvent {
+  const NextPageRequested();
+}

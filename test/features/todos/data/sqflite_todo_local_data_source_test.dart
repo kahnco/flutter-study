@@ -108,5 +108,17 @@ void main() {
       final rows = await ds.search(const TodoQuery(text: '%'));
       expect(rows.map((m) => m.id).toList(), ['1']);
     });
+
+    test('limit/offset 로 페이지를 끊어 온다', () async {
+      for (final id in ['1', '2', '3', '4', '5']) {
+        await ds.insert(titled(id, '할 일 $id'));
+      }
+      final page1 = await ds.search(const TodoQuery(limit: 2, offset: 0));
+      expect(page1.map((m) => m.id).toList(), ['1', '2']);
+      final page2 = await ds.search(const TodoQuery(limit: 2, offset: 2));
+      expect(page2.map((m) => m.id).toList(), ['3', '4']);
+      final page3 = await ds.search(const TodoQuery(limit: 2, offset: 4));
+      expect(page3.map((m) => m.id).toList(), ['5']); // 마지막은 한 건뿐
+    });
   });
 }

@@ -27,7 +27,7 @@ class InMemoryTodoLocalDataSource implements TodoLocalDataSource {
   @override
   Future<List<TodoModel>> search(TodoQuery query) async {
     final needle = query.text.trim().toLowerCase();
-    return _store.where((m) {
+    final matched = _store.where((m) {
       final matchesStatus = switch (query.status) {
         TodosFilter.all => true,
         TodosFilter.active => !m.completed,
@@ -36,7 +36,11 @@ class InMemoryTodoLocalDataSource implements TodoLocalDataSource {
       final matchesText =
           needle.isEmpty || m.title.toLowerCase().contains(needle);
       return matchesStatus && matchesText;
-    }).toList();
+    });
+    // SQL 의 LIMIT/OFFSET 과 같은 의미로 창을 자른다.
+    final paged =
+        query.limit == null ? matched : matched.skip(query.offset).take(query.limit!);
+    return paged.toList();
   }
 
   @override

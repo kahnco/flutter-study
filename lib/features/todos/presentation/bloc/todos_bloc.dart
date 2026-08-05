@@ -48,6 +48,9 @@ class TodosBloc {
   String _query = '';
   Timer? _debounce;
 
+  /// 한 페이지 크기. 테스트는 작게 낮춰 페이징을 검증한다.
+  int pageSize = 20;
+
   TodosState _current = const TodosInitial();
 
   /// 화면이 구독하는 상태 흐름.
@@ -93,6 +96,8 @@ class TodosBloc {
         _debounce = Timer(searchDebounce, () => add(const QueryRefreshed()));
       case QueryRefreshed():
         await _runQuery();
+      case NextPageRequested():
+        await _loadMore();
     }
   }
 
@@ -105,28 +110,68 @@ class TodosBloc {
     );
   }
 
-  /// 변경 유스케이스의 결과를 공통 처리: 실패는 한 줄 오류, 성공은 목록 재질의.
+  /// 변경(추가·토글·삭제) 뒤에는 첫 페이지부터 다시 읽는다.
+  /// (로드된 창 전체를 보존하는 건 오프셋 페이징 + 변경의 정합성 문제라 미룬다 — 정직하게 참고)
   Future<void> _mutate(Either<Failure, Object?> result) => result.match(
         (failure) async => _showError(failure.message),
         (_) async => _runQuery(),
       );
 
-  /// 지금 조건(_filter·_query)으로 저장소에 질의해 결과를 방출한다.
-  /// 필터·검색이 SQL 로 내려가 있으니, 돌아온 목록이 곧 화면에 그릴 목록이다.
+  TodoQuery _queryFor({required int offset, required int limit}) => TodoQuery(
+        status: _filter,
+        text: _query,
+        offset: offset,
+        limit: limit,
+      );
+
+  /// 조건이 바뀌었을 때(시작·필터·검색) 첫 페이지부터 새로 읽는다.
+  /// `pageSize + 1` 을 청해, 하나 더 오면 "다음 페이지가 있다"(hasMore)로 판단한다.
   Future<void> _runQuery() async {
-    final result = await _getTodos(TodoQuery(status: _filter, text: _query));
+    final result = await _getTodos(_queryFor(offset: 0, limit: pageSize + 1));
     result.match(
       (failure) => _emit(TodosFailure(failure.message)),
-      (todos) => _emit(TodosLoaded(todos, filter: _filter, query: _query)),
+      (rows) => _emit(TodosLoaded(
+        rows.take(pageSize).toList(),
+        filter: _filter,
+        query: _query,
+        hasMore: rows.length > pageSize,
+      )),
     );
   }
 
-  /// 목록·필터·검색어는 유지하고 화면에 한 줄짜리 오류만 얹는다.
+  /// 바닥에 닿아 다음 페이지를 이어 붙인다. 더 없거나 이미 불러오는 중이면 무시.
+  Future<void> _loadMore() async {
+    final now = _current;
+    if (now is! TodosLoaded || !now.hasMore || now.loadingMore) return;
+    _emit(TodosLoaded(now.todos,
+        filter: _filter, query: _query, hasMore: true, loadingMore: true));
+
+    final result =
+        await _getTodos(_queryFor(offset: now.todos.length, limit: pageSize + 1));
+    result.match(
+      (failure) => _emit(TodosLoaded(now.todos,
+          filter: _filter,
+          query: _query,
+          hasMore: now.hasMore,
+          error: failure.message)),
+      (rows) => _emit(TodosLoaded(
+        [...now.todos, ...rows.take(pageSize)],
+        filter: _filter,
+        query: _query,
+        hasMore: rows.length > pageSize,
+      )),
+    );
+  }
+
+  /// 목록·필터·검색어·페이징 상태는 유지하고 화면에 한 줄짜리 오류만 얹는다.
   void _showError(String message) {
     final now = _current;
     _emit(now is TodosLoaded
         ? TodosLoaded(now.todos,
-            filter: now.filter, query: now.query, error: message)
+            filter: now.filter,
+            query: now.query,
+            hasMore: now.hasMore,
+            error: message)
         : TodosFailure(message));
   }
 

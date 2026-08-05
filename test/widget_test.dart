@@ -1,7 +1,17 @@
 // 할 일 화면 위젯 테스트 — fake 그래프(인메모리)로 화면을 띄우고, 사용자 동작이
 // 이벤트를 던져 상태가 화면에 반영되는지 끝까지 확인한다.
 import 'package:flutter/material.dart';
+import 'package:flutter_study/core/clock/clock.dart';
 import 'package:flutter_study/core/di/injection.dart';
+import 'package:flutter_study/core/id/id_generator.dart';
+import 'package:flutter_study/features/todos/data/datasources/todo_local_data_source.dart';
+import 'package:flutter_study/features/todos/data/repositories/todos_repository_impl.dart';
+import 'package:flutter_study/features/todos/domain/usecases/add_todo.dart';
+import 'package:flutter_study/features/todos/domain/usecases/get_todos.dart';
+import 'package:flutter_study/features/todos/domain/usecases/remove_todo.dart';
+import 'package:flutter_study/features/todos/domain/usecases/toggle_todo.dart';
+import 'package:flutter_study/features/todos/domain/value_objects/todo_title.dart';
+import 'package:flutter_study/features/todos/presentation/bloc/todos_bloc.dart';
 import 'package:flutter_study/features/todos/presentation/pages/todos_page.dart';
 import 'package:flutter_study/features/todos/presentation/widgets/todo_input_field.dart';
 import 'package:flutter_study/features/todos/presentation/widgets/todo_tile.dart';
@@ -125,5 +135,30 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(TodoTile), findsOneWidget);
     expect(find.text('청소하기'), findsOneWidget);
+  });
+
+  testWidgets('첫 페이지는 pageSize 만큼만 그린다', (tester) async {
+    // 작은 pageSize 의 bloc 을 주입해, 3건 중 2건만(첫 페이지) 보이는지 본다.
+    final local = InMemoryTodoLocalDataSource();
+    final repo =
+        TodosRepositoryImpl(local, SequentialIdGenerator(), FixedClock());
+    for (var i = 0; i < 3; i++) {
+      await repo.add(TodoTitle.trusted('할 일 $i'));
+    }
+    final bloc = TodosBloc(
+      GetTodos(repo),
+      AddTodo(repo),
+      ToggleTodo(repo),
+      RemoveTodo(repo),
+    )..pageSize = 2;
+
+    await tester.pumpWidget(
+      MaterialApp(home: TodosScope(bloc: bloc, child: const TodosPage())),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TodoTile), findsNWidgets(2));
+    expect(find.text('할 일 0'), findsOneWidget);
+    expect(find.text('할 일 2'), findsNothing); // 셋째는 다음 페이지
   });
 }

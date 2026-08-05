@@ -64,6 +64,9 @@ class SqfliteTodoLocalDataSource implements TodoLocalDataSource {
       where: clauses.isEmpty ? null : clauses.join(' AND '),
       whereArgs: args.isEmpty ? null : args,
       orderBy: 'created_at ASC, rowid ASC',
+      // OFFSET 은 LIMIT 없이 못 쓴다 — limit 이 있을 때만 함께 건넨다.
+      limit: query.limit,
+      offset: query.limit == null ? null : query.offset,
     );
     return rows.map(_fromRow).toList();
   }

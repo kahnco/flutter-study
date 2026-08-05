@@ -46,6 +46,8 @@ class TodosPage extends StatelessWidget {
                   Expanded(
                     child: TodoListView(
                       todos: loaded.todos,
+                      hasMore: loaded.hasMore,
+                      loadingMore: loaded.loadingMore,
                       emptyLabel: loaded.isFiltered
                           ? '조건에 맞는 할 일이 없습니다.'
                           : '할 일이 없습니다. 위에서 추가해 보세요.',
