@@ -79,7 +79,7 @@ void main() {
       TodoModel(
           id: id, title: title, completed: completed, createdAtMillis: at);
 
-  group('search — SQL WHERE/LIKE', () {
+  group('search — WHERE + FTS5 MATCH', () {
     test('status=active 는 completed=0 만 (WHERE)', () async {
       await ds.insert(titled('1', '가', completed: true));
       await ds.insert(titled('2', '나'));
@@ -87,7 +87,7 @@ void main() {
       expect(rows.map((m) => m.id).toList(), ['2']);
     });
 
-    test('제목 LIKE 로 부분 일치를 찾는다', () async {
+    test('FTS 접두 MATCH 로 토큰을 찾는다', () async {
       await ds.insert(titled('1', '우유 사기'));
       await ds.insert(titled('2', '청소하기'));
       await ds.insert(titled('3', '우유 데우기'));
@@ -104,12 +104,20 @@ void main() {
       expect(rows.map((m) => m.id).toList(), ['2']);
     });
 
-    test('LIKE 와일드카드(%)는 리터럴로 이스케이프된다', () async {
-      await ds.insert(titled('1', '50% 할인'));
-      await ds.insert(titled('2', '무엇이든'));
-      // '%' 를 와일드카드로 봤다면 둘 다 걸리지만, 이스케이프되므로 1건만.
-      final rows = await ds.search(const TodoQuery(text: '%'));
-      expect(rows.map((m) => m.id).toList(), ['1']);
+    test('여러 단어는 AND 로 좁힌다', () async {
+      await ds.insert(titled('1', '우유 사기'));
+      await ds.insert(titled('2', '우유 데우기'));
+      // "우유 데우기" → 두 토큰 모두 가진 것만.
+      final rows = await ds.search(const TodoQuery(text: '우유 데우'));
+      expect(rows.map((m) => m.id).toList(), ['2']);
+    });
+
+    test('업데이트하면 검색 색인도 따라 바뀐다(트리거 동기화)', () async {
+      await ds.insert(titled('1', '우유 사기'));
+      // 제목을 바꾸면 트리거가 FTS 를 갱신 → 옛 토큰으론 안 잡히고 새 토큰으로 잡힌다.
+      await ds.update(titled('1', '커피 사기'));
+      expect(await ds.search(const TodoQuery(text: '우유')), isEmpty);
+      expect((await ds.search(const TodoQuery(text: '커피'))).single.id, '1');
     });
 
     test('keyset 커서로 페이지를 끊어 온다', () async {
@@ -148,7 +156,7 @@ void main() {
     });
   });
 
-  group('마이그레이션 (v1 → v2)', () {
+  group('마이그레이션 (스키마 버전 올리기)', () {
     // todos 테이블에 걸린 우리 인덱스 이름 목록(PK 자동 인덱스는 이름이 달라 구분됨).
     Future<List<String>> indexNames(Database d) async {
       final rows = await d.rawQuery(
@@ -158,14 +166,14 @@ void main() {
       return rows.map((r) => r['name'] as String).toList();
     }
 
-    test('v1 DB 를 v2 로 열면 keyset 인덱스가 생기고 데이터는 보존된다', () async {
+    test('v1 DB 를 최신으로 열면 인덱스·FTS 가 생기고 데이터·검색이 살아난다', () async {
       final path = p.join(
         await getDatabasesPath(),
         'migrate_${DateTime.now().microsecondsSinceEpoch}.db',
       );
       addTearDown(() => databaseFactory.deleteDatabase(path));
 
-      // 1) v1(테이블만, 인덱스 없음)으로 열어 데이터 저장 후 닫기.
+      // 1) v1(테이블만, 인덱스·FTS 없음)으로 열어 데이터 저장 후 닫기.
       final v1 = await databaseFactory.openDatabase(
         path,
         options: OpenDatabaseOptions(
@@ -175,15 +183,15 @@ void main() {
       );
       await v1.insert(todosTable, {
         'id': 'id-1',
-        'title': '옛 데이터',
+        'title': '옛 우유 데이터',
         'completed': 0,
         'created_at': 0,
       });
       expect(await indexNames(v1), isNot(contains('idx_todos_created_at_id')));
       await v1.close();
 
-      // 2) v2 로 재오픈 → onUpgrade 로 인덱스 추가.
-      final v2 = await databaseFactory.openDatabase(
+      // 2) 최신 버전으로 재오픈 → onUpgrade 로 인덱스 + FTS(백필).
+      final upgraded = await databaseFactory.openDatabase(
         path,
         options: OpenDatabaseOptions(
           version: todosDbVersion,
@@ -191,10 +199,14 @@ void main() {
           onUpgrade: onUpgradeTodosDb,
         ),
       );
-      expect(await indexNames(v2), contains('idx_todos_created_at_id'));
-      final rows = await v2.query(todosTable);
-      expect(rows.single['title'], '옛 데이터'); // 데이터 보존
-      await v2.close();
+      expect(await indexNames(upgraded), contains('idx_todos_created_at_id'));
+      expect((await upgraded.query(todosTable)).single['title'], '옛 우유 데이터');
+
+      // 백필된 행이 FTS 검색으로 잡혀야 한다(마이그레이션이 검색까지 살렸는지).
+      final ds2 = SqfliteTodoLocalDataSource(upgraded);
+      final found = await ds2.search(const TodoQuery(text: '우유'));
+      expect(found.single.id, 'id-1');
+      await upgraded.close();
     });
 
     test('새 v2 DB 는 onCreate 로 처음부터 인덱스를 갖는다', () async {
