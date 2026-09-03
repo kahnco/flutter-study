@@ -5,6 +5,7 @@ import 'package:flutter_study/features/todos/data/models/todo_model.dart';
 import 'package:flutter_study/features/todos/domain/value_objects/todo_query.dart';
 import 'package:flutter_study/features/todos/domain/value_objects/todos_filter.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -20,8 +21,9 @@ void main() {
     db = await databaseFactory.openDatabase(
       inMemoryDatabasePath,
       options: OpenDatabaseOptions(
-        version: 1,
-        onCreate: (db, version) => db.execute(createTodosTableSql),
+        version: todosDbVersion,
+        onCreate: onCreateTodosDb,
+        onUpgrade: onUpgradeTodosDb,
       ),
     );
     ds = SqfliteTodoLocalDataSource(db);
@@ -143,6 +145,68 @@ void main() {
         TodoQuery(limit: 2, after: TodoCursor(createdAtMillis: 2, id: '2')),
       );
       expect(page2.map((m) => m.id).toList(), ['3', '4']);
+    });
+  });
+
+  group('마이그레이션 (v1 → v2)', () {
+    // todos 테이블에 걸린 우리 인덱스 이름 목록(PK 자동 인덱스는 이름이 달라 구분됨).
+    Future<List<String>> indexNames(Database d) async {
+      final rows = await d.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name=?",
+        [todosTable],
+      );
+      return rows.map((r) => r['name'] as String).toList();
+    }
+
+    test('v1 DB 를 v2 로 열면 keyset 인덱스가 생기고 데이터는 보존된다', () async {
+      final path = p.join(
+        await getDatabasesPath(),
+        'migrate_${DateTime.now().microsecondsSinceEpoch}.db',
+      );
+      addTearDown(() => databaseFactory.deleteDatabase(path));
+
+      // 1) v1(테이블만, 인덱스 없음)으로 열어 데이터 저장 후 닫기.
+      final v1 = await databaseFactory.openDatabase(
+        path,
+        options: OpenDatabaseOptions(
+          version: 1,
+          onCreate: (db, _) => db.execute(createTodosTableSql),
+        ),
+      );
+      await v1.insert(todosTable, {
+        'id': 'id-1',
+        'title': '옛 데이터',
+        'completed': 0,
+        'created_at': 0,
+      });
+      expect(await indexNames(v1), isNot(contains('idx_todos_created_at_id')));
+      await v1.close();
+
+      // 2) v2 로 재오픈 → onUpgrade 로 인덱스 추가.
+      final v2 = await databaseFactory.openDatabase(
+        path,
+        options: OpenDatabaseOptions(
+          version: todosDbVersion,
+          onCreate: onCreateTodosDb,
+          onUpgrade: onUpgradeTodosDb,
+        ),
+      );
+      expect(await indexNames(v2), contains('idx_todos_created_at_id'));
+      final rows = await v2.query(todosTable);
+      expect(rows.single['title'], '옛 데이터'); // 데이터 보존
+      await v2.close();
+    });
+
+    test('새 v2 DB 는 onCreate 로 처음부터 인덱스를 갖는다', () async {
+      final fresh = await databaseFactory.openDatabase(
+        inMemoryDatabasePath,
+        options: OpenDatabaseOptions(
+          version: todosDbVersion,
+          onCreate: onCreateTodosDb,
+        ),
+      );
+      expect(await indexNames(fresh), contains('idx_todos_created_at_id'));
+      await fresh.close();
     });
   });
 }

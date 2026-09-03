@@ -14,8 +14,9 @@ abstract class DatabaseModule {
     final path = p.join(await getDatabasesPath(), 'todos.db');
     return openDatabase(
       path,
-      version: 1,
-      onCreate: (db, version) => db.execute(createTodosTableSql),
+      version: todosDbVersion,
+      onCreate: onCreateTodosDb,
+      onUpgrade: onUpgradeTodosDb,
     );
   }
 }

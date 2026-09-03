@@ -8,6 +8,10 @@ import 'package:flutter_study/features/todos/domain/value_objects/todos_filter.d
 /// todos 테이블 스키마. 모듈(생성 시)과 테스트가 같은 정의를 쓰도록 한곳에 둔다.
 /// completed 는 SQLite 에 boolean 이 없어 0/1 정수로, created_at 은 epoch millis 로.
 const String todosTable = 'todos';
+
+/// 스키마 버전. v2 = keyset 정렬 키에 복합 인덱스 추가(10편).
+const int todosDbVersion = 2;
+
 const String createTodosTableSql = '''
 CREATE TABLE $todosTable(
   id TEXT PRIMARY KEY,
@@ -16,6 +20,26 @@ CREATE TABLE $todosTable(
   created_at INTEGER NOT NULL
 )
 ''';
+
+/// keyset 정렬·커서 키 (created_at, id) 를 그대로 덮는 복합 인덱스.
+/// 이게 있어야 `ORDER BY created_at, id` + `(created_at, id) > (?, ?)` 가 O(log n)(9편).
+const String createTodosIndexSql =
+    'CREATE INDEX IF NOT EXISTS idx_todos_created_at_id '
+    'ON $todosTable(created_at, id)';
+
+/// 새 DB 생성(현재 버전): 테이블 + keyset 인덱스.
+Future<void> onCreateTodosDb(Database db, int version) async {
+  await db.execute(createTodosTableSql);
+  await db.execute(createTodosIndexSql);
+}
+
+/// 스키마 업그레이드. 낮은 버전에서 올라올 때 필요한 변경만 순차 적용한다.
+/// v1 → v2: keyset 인덱스 추가(테이블은 이미 있으므로 인덱스만).
+Future<void> onUpgradeTodosDb(Database db, int oldVersion, int newVersion) async {
+  if (oldVersion < 2) {
+    await db.execute(createTodosIndexSql);
+  }
+}
 
 /// 실제 영속(prod) 어댑터. sqflite 로 디스크에 남긴다 — 앱을 꺼도 살아있다.
 /// [Database] 는 주입받는다(열기는 DatabaseModule 이 @preResolve 로 담당).
