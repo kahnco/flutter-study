@@ -72,9 +72,10 @@ void main() {
   });
 
   // 제목을 지정해 넣는 헬퍼(검색 테스트용).
-  TodoModel titled(String id, String title, {bool completed = false}) =>
+  TodoModel titled(String id, String title,
+          {bool completed = false, int at = 0}) =>
       TodoModel(
-          id: id, title: title, completed: completed, createdAtMillis: 0);
+          id: id, title: title, completed: completed, createdAtMillis: at);
 
   group('search — SQL WHERE/LIKE', () {
     test('status=active 는 completed=0 만 (WHERE)', () async {
@@ -109,16 +110,39 @@ void main() {
       expect(rows.map((m) => m.id).toList(), ['1']);
     });
 
-    test('limit/offset 로 페이지를 끊어 온다', () async {
-      for (final id in ['1', '2', '3', '4', '5']) {
-        await ds.insert(titled(id, '할 일 $id'));
+    test('keyset 커서로 페이지를 끊어 온다', () async {
+      for (var i = 1; i <= 5; i++) {
+        await ds.insert(titled('$i', '할 일 $i', at: i));
       }
-      final page1 = await ds.search(const TodoQuery(limit: 2, offset: 0));
+      // 첫 페이지: 커서 없음
+      final page1 = await ds.search(const TodoQuery(limit: 2));
       expect(page1.map((m) => m.id).toList(), ['1', '2']);
-      final page2 = await ds.search(const TodoQuery(limit: 2, offset: 2));
+      // 다음 페이지: 마지막 항목(2)을 커서로
+      final page2 = await ds.search(
+        TodoQuery(limit: 2, after: TodoCursor(createdAtMillis: 2, id: '2')),
+      );
       expect(page2.map((m) => m.id).toList(), ['3', '4']);
-      final page3 = await ds.search(const TodoQuery(limit: 2, offset: 4));
-      expect(page3.map((m) => m.id).toList(), ['5']); // 마지막은 한 건뿐
+      final page3 = await ds.search(
+        TodoQuery(limit: 2, after: TodoCursor(createdAtMillis: 4, id: '4')),
+      );
+      expect(page3.map((m) => m.id).toList(), ['5']);
+    });
+
+    test('keyset 은 페이지 사이 삭제에도 항목을 건너뛰지 않는다', () async {
+      for (var i = 1; i <= 5; i++) {
+        await ds.insert(titled('$i', '할 일 $i', at: i));
+      }
+      final page1 = await ds.search(const TodoQuery(limit: 2)); // [1,2]
+      expect(page1.map((m) => m.id).toList(), ['1', '2']);
+
+      // 페이지 사이에 앞쪽 항목(1)을 삭제 — offset(2)이었다면 3을 건너뛰었을 상황.
+      await ds.delete('1');
+
+      // 커서(2) 이후를 청하므로 3을 안 건너뛴다.
+      final page2 = await ds.search(
+        TodoQuery(limit: 2, after: TodoCursor(createdAtMillis: 2, id: '2')),
+      );
+      expect(page2.map((m) => m.id).toList(), ['3', '4']);
     });
   });
 }

@@ -36,10 +36,22 @@ class InMemoryTodoLocalDataSource implements TodoLocalDataSource {
       final matchesText =
           needle.isEmpty || m.title.toLowerCase().contains(needle);
       return matchesStatus && matchesText;
-    });
-    // SQL 의 LIMIT/OFFSET 과 같은 의미로 창을 자른다.
-    final paged =
-        query.limit == null ? matched : matched.skip(query.offset).take(query.limit!);
+    }).toList()
+      // 정렬 키를 sqflite 와 같게: created_at ASC, id ASC.
+      ..sort((a, b) {
+        final byTime = a.createdAtMillis.compareTo(b.createdAtMillis);
+        return byTime != 0 ? byTime : a.id.compareTo(b.id);
+      });
+
+    // keyset 커서: 정렬된 목록에서 커서보다 뒤에 오는 것만.
+    Iterable<TodoModel> paged = matched;
+    if (query.after case final cursor?) {
+      paged = paged.where((m) =>
+          m.createdAtMillis > cursor.createdAtMillis ||
+          (m.createdAtMillis == cursor.createdAtMillis &&
+              m.id.compareTo(cursor.id) > 0));
+    }
+    if (query.limit != null) paged = paged.take(query.limit!);
     return paged.toList();
   }
 

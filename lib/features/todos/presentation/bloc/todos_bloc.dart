@@ -117,17 +117,17 @@ class TodosBloc {
         (_) async => _runQuery(),
       );
 
-  TodoQuery _queryFor({required int offset, required int limit}) => TodoQuery(
+  TodoQuery _queryFor({TodoCursor? after, required int limit}) => TodoQuery(
         status: _filter,
         text: _query,
-        offset: offset,
+        after: after,
         limit: limit,
       );
 
-  /// 조건이 바뀌었을 때(시작·필터·검색) 첫 페이지부터 새로 읽는다.
+  /// 조건이 바뀌었을 때(시작·필터·검색) 첫 페이지부터 새로 읽는다(커서 없음).
   /// `pageSize + 1` 을 청해, 하나 더 오면 "다음 페이지가 있다"(hasMore)로 판단한다.
   Future<void> _runQuery() async {
-    final result = await _getTodos(_queryFor(offset: 0, limit: pageSize + 1));
+    final result = await _getTodos(_queryFor(limit: pageSize + 1));
     result.match(
       (failure) => _emit(TodosFailure(failure.message)),
       (rows) => _emit(TodosLoaded(
@@ -146,8 +146,15 @@ class TodosBloc {
     _emit(TodosLoaded(now.todos,
         filter: _filter, query: _query, hasMore: true, loadingMore: true));
 
-    final result =
-        await _getTodos(_queryFor(offset: now.todos.length, limit: pageSize + 1));
+    // 커서 = 지금까지의 마지막 항목. offset 대신 "이 항목 이후"를 청한다(9편).
+    final last = now.todos.last;
+    final result = await _getTodos(_queryFor(
+      after: TodoCursor(
+        createdAtMillis: last.createdAt.millisecondsSinceEpoch,
+        id: last.id,
+      ),
+      limit: pageSize + 1,
+    ));
     result.match(
       (failure) => _emit(TodosLoaded(now.todos,
           filter: _filter,

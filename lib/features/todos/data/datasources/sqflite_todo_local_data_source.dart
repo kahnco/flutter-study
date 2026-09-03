@@ -59,14 +59,21 @@ class SqfliteTodoLocalDataSource implements TodoLocalDataSource {
       args.add('%$escaped%');
     }
 
+    // keyset 커서: "마지막 본 항목 이후"만. 정렬 키와 같은 (created_at, id) 로 비교(9편).
+    // SQLite 의 행 값(row value) 비교로 한 줄에 담는다.
+    if (query.after case final cursor?) {
+      clauses.add('(created_at, id) > (?, ?)');
+      args
+        ..add(cursor.createdAtMillis)
+        ..add(cursor.id);
+    }
+
     final rows = await _db.query(
       todosTable,
       where: clauses.isEmpty ? null : clauses.join(' AND '),
       whereArgs: args.isEmpty ? null : args,
-      orderBy: 'created_at ASC, rowid ASC',
-      // OFFSET 은 LIMIT 없이 못 쓴다 — limit 이 있을 때만 함께 건넨다.
+      orderBy: 'created_at ASC, id ASC',
       limit: query.limit,
-      offset: query.limit == null ? null : query.offset,
     );
     return rows.map(_fromRow).toList();
   }
