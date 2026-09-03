@@ -48,6 +48,18 @@ class TodosRepositoryImpl implements TodosRepository {
   }
 
   @override
+  Future<Either<Failure, Unit>> edit(String id, TodoTitle title) async {
+    try {
+      final matches = (await _local.readAll()).where((m) => m.id == id);
+      if (matches.isEmpty) return left(const CacheFailure('없는 항목입니다'));
+      await _local.update(matches.first.copyWith(title: title.value));
+      return right(unit);
+    } catch (_) {
+      return left(const CacheFailure());
+    }
+  }
+
+  @override
   Future<Either<Failure, Unit>> toggle(String id) async {
     try {
       final matches = (await _local.readAll()).where((m) => m.id == id);

@@ -24,6 +24,16 @@ class TodoAdded extends TodosEvent {
   List<Object?> get props => [rawTitle];
 }
 
+/// 제목 수정. 화면이 던지는 **날것의** 제목 — 검증은 bloc 이 값 객체로 한다.
+class TodoEdited extends TodosEvent {
+  const TodoEdited(this.id, this.rawTitle);
+  final String id;
+  final String rawTitle;
+
+  @override
+  List<Object?> get props => [id, rawTitle];
+}
+
 class TodoToggled extends TodosEvent {
   const TodoToggled(this.id);
   final String id;

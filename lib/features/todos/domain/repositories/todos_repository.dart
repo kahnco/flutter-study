@@ -10,6 +10,7 @@ abstract interface class TodosRepository {
   /// 조건([TodoQuery])에 맞는 목록을 돌려준다. 조건이 비면 전체.
   Future<Either<Failure, List<Todo>>> search(TodoQuery query);
   Future<Either<Failure, Todo>> add(TodoTitle title);
+  Future<Either<Failure, Unit>> edit(String id, TodoTitle title);
   Future<Either<Failure, Unit>> toggle(String id);
   Future<Either<Failure, Unit>> remove(String id);
 }

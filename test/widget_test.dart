@@ -7,6 +7,7 @@ import 'package:flutter_study/core/id/id_generator.dart';
 import 'package:flutter_study/features/todos/data/datasources/todo_local_data_source.dart';
 import 'package:flutter_study/features/todos/data/repositories/todos_repository_impl.dart';
 import 'package:flutter_study/features/todos/domain/usecases/add_todo.dart';
+import 'package:flutter_study/features/todos/domain/usecases/edit_todo.dart';
 import 'package:flutter_study/features/todos/domain/usecases/get_todos.dart';
 import 'package:flutter_study/features/todos/domain/usecases/remove_todo.dart';
 import 'package:flutter_study/features/todos/domain/usecases/toggle_todo.dart';
@@ -14,6 +15,7 @@ import 'package:flutter_study/features/todos/domain/value_objects/todo_title.dar
 import 'package:flutter_study/features/todos/presentation/bloc/todos_bloc.dart';
 import 'package:flutter_study/features/todos/presentation/pages/todos_page.dart';
 import 'package:flutter_study/features/todos/presentation/widgets/todo_input_field.dart';
+import 'package:flutter_study/features/todos/presentation/widgets/todo_edit_dialog.dart';
 import 'package:flutter_study/features/todos/presentation/widgets/todo_tile.dart';
 import 'package:flutter_study/features/todos/presentation/widgets/todos_scope.dart';
 import 'package:flutter_study/features/todos/presentation/widgets/todos_search_field.dart';
@@ -148,6 +150,7 @@ void main() {
     final bloc = TodosBloc(
       GetTodos(repo),
       AddTodo(repo),
+      EditTodo(repo),
       ToggleTodo(repo),
       RemoveTodo(repo),
     )..pageSize = 2;
@@ -160,5 +163,45 @@ void main() {
     expect(find.byType(TodoTile), findsNWidgets(2));
     expect(find.text('할 일 0'), findsOneWidget);
     expect(find.text('할 일 2'), findsNothing); // 셋째는 다음 페이지
+  });
+
+  testWidgets('타일을 탭해 제목을 수정한다', (tester) async {
+    await pumpApp(tester);
+    await addTodo(tester, '우유');
+
+    // 타일(제목)을 탭 → 편집 다이얼로그
+    await tester.tap(find.text('우유'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TodoEditDialog), findsOneWidget);
+
+    // 제목을 바꾸고 저장
+    final editField = find.descendant(
+      of: find.byType(TodoEditDialog),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(editField, '커피');
+    await tester.tap(find.text('저장'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('커피'), findsOneWidget);
+    expect(find.text('우유'), findsNothing);
+  });
+
+  testWidgets('수정을 빈 제목으로 저장하면 오류가 뜨고 원래대로 남는다', (tester) async {
+    await pumpApp(tester);
+    await addTodo(tester, '우유');
+
+    await tester.tap(find.text('우유'));
+    await tester.pumpAndSettle();
+    final editField = find.descendant(
+      of: find.byType(TodoEditDialog),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(editField, '   ');
+    await tester.tap(find.text('저장'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('할 일을 입력하세요'), findsOneWidget); // 오류
+    expect(find.text('우유'), findsOneWidget); // 원래 제목 유지
   });
 }

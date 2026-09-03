@@ -22,6 +22,8 @@ import 'package:flutter_study/features/todos/domain/repositories/todos_repositor
     as _i58;
 import 'package:flutter_study/features/todos/domain/usecases/add_todo.dart'
     as _i181;
+import 'package:flutter_study/features/todos/domain/usecases/edit_todo.dart'
+    as _i233;
 import 'package:flutter_study/features/todos/domain/usecases/get_todos.dart'
     as _i819;
 import 'package:flutter_study/features/todos/domain/usecases/remove_todo.dart'
@@ -84,6 +86,9 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i181.AddTodo>(
       () => _i181.AddTodo(gh<_i58.TodosRepository>()),
     );
+    gh.lazySingleton<_i233.EditTodo>(
+      () => _i233.EditTodo(gh<_i58.TodosRepository>()),
+    );
     gh.lazySingleton<_i819.GetTodos>(
       () => _i819.GetTodos(gh<_i58.TodosRepository>()),
     );
@@ -97,6 +102,7 @@ extension GetItInjectableX on _i174.GetIt {
       () => _i662.TodosBloc(
         gh<_i819.GetTodos>(),
         gh<_i181.AddTodo>(),
+        gh<_i233.EditTodo>(),
         gh<_i496.ToggleTodo>(),
         gh<_i502.RemoveTodo>(),
       ),

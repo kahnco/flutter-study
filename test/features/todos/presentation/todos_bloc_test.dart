@@ -3,6 +3,7 @@ import 'package:flutter_study/core/id/id_generator.dart';
 import 'package:flutter_study/features/todos/data/datasources/todo_local_data_source.dart';
 import 'package:flutter_study/features/todos/data/repositories/todos_repository_impl.dart';
 import 'package:flutter_study/features/todos/domain/usecases/add_todo.dart';
+import 'package:flutter_study/features/todos/domain/usecases/edit_todo.dart';
 import 'package:flutter_study/features/todos/domain/usecases/get_todos.dart';
 import 'package:flutter_study/features/todos/domain/usecases/remove_todo.dart';
 import 'package:flutter_study/features/todos/domain/usecases/toggle_todo.dart';
@@ -23,6 +24,7 @@ void main() {
     bloc = TodosBloc(
       GetTodos(repo),
       AddTodo(repo),
+      EditTodo(repo),
       ToggleTodo(repo),
       RemoveTodo(repo),
     )..searchDebounce = Duration.zero; // 테스트에선 디바운스를 즉시로
@@ -79,6 +81,35 @@ void main() {
     bloc
       ..add(const TodosStarted())
       ..add(const TodoAdded('   '));
+  });
+
+  test('제목을 수정하면 반영된다', () async {
+    final started = nextLoaded((s) => s.todos.isEmpty);
+    bloc.add(const TodosStarted());
+    await started;
+
+    final added = nextLoaded((s) => s.todos.length == 1);
+    bloc.add(const TodoAdded('우유'));
+    await added;
+
+    final edited = nextLoaded((s) => s.todos.single.title.value == '커피');
+    bloc.add(const TodoEdited('id-1', '커피'));
+    await edited;
+  });
+
+  test('빈 제목으로 수정하면 오류가 뜨고 원래 제목이 유지된다', () async {
+    final started = nextLoaded((s) => s.todos.isEmpty);
+    bloc.add(const TodosStarted());
+    await started;
+
+    final added = nextLoaded((s) => s.todos.length == 1);
+    bloc.add(const TodoAdded('우유'));
+    await added;
+
+    final errored = nextLoaded((s) => s.error == '할 일을 입력하세요');
+    bloc.add(const TodoEdited('id-1', '   '));
+    final state = await errored;
+    expect(state.todos.single.title.value, '우유'); // 원래 제목 그대로
   });
 
   test('토글하면 완료 상태가 뒤집힌다', () {
@@ -179,6 +210,7 @@ void main() {
       paged = TodosBloc(
         GetTodos(repo),
         AddTodo(repo),
+      EditTodo(repo),
         ToggleTodo(repo),
         RemoveTodo(repo),
       )..pageSize = 2;

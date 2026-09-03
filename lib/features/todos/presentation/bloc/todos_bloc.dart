@@ -4,6 +4,7 @@ import 'package:fpdart/fpdart.dart';
 import 'package:injectable/injectable.dart';
 import 'package:flutter_study/core/error/failure.dart';
 import 'package:flutter_study/features/todos/domain/usecases/add_todo.dart';
+import 'package:flutter_study/features/todos/domain/usecases/edit_todo.dart';
 import 'package:flutter_study/features/todos/domain/usecases/get_todos.dart';
 import 'package:flutter_study/features/todos/domain/usecases/remove_todo.dart';
 import 'package:flutter_study/features/todos/domain/usecases/toggle_todo.dart';
@@ -26,12 +27,19 @@ import 'package:flutter_study/features/todos/presentation/bloc/todos_state.dart'
 /// 2편에서 미뤄 둔 '이벤트 트랜스포머'를 여기서 직접 짠다.
 @injectable
 class TodosBloc {
-  TodosBloc(this._getTodos, this._addTodo, this._toggleTodo, this._removeTodo) {
+  TodosBloc(
+    this._getTodos,
+    this._addTodo,
+    this._editTodo,
+    this._toggleTodo,
+    this._removeTodo,
+  ) {
     _drain();
   }
 
   final GetTodos _getTodos;
   final AddTodo _addTodo;
+  final EditTodo _editTodo;
   final ToggleTodo _toggleTodo;
   final RemoveTodo _removeTodo;
 
@@ -81,6 +89,8 @@ class TodosBloc {
         await _runQuery();
       case TodoAdded(:final rawTitle):
         await _onAdded(rawTitle);
+      case TodoEdited(:final id, :final rawTitle):
+        await _onEdited(id, rawTitle);
       case TodoToggled(:final id):
         await _mutate(await _toggleTodo(id));
       case TodoRemoved(:final id):
@@ -107,6 +117,15 @@ class TodosBloc {
     await title.match(
       (failure) async => _showError(failure.message),
       (value) async => _mutate(await _addTodo(value)),
+    );
+  }
+
+  Future<void> _onEdited(String id, String rawTitle) async {
+    // 수정도 같은 값 객체로 재검증한다 — 빈 제목·과길이는 여기서 걸린다.
+    final title = TodoTitle.create(rawTitle);
+    await title.match(
+      (failure) async => _showError(failure.message),
+      (value) async => _mutate(await _editTodo((id, value))),
     );
   }
 

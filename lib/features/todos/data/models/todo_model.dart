@@ -43,9 +43,9 @@ class TodoModel {
         createdAt: DateTime.fromMillisecondsSinceEpoch(createdAtMillis),
       );
 
-  TodoModel copyWith({bool? completed}) => TodoModel(
+  TodoModel copyWith({String? title, bool? completed}) => TodoModel(
         id: id,
-        title: title,
+        title: title ?? this.title,
         completed: completed ?? this.completed,
         createdAtMillis: createdAtMillis,
       );
